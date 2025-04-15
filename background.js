@@ -5,41 +5,32 @@ let blockedSites = [];
 const reloadedTabs = new Set();
 
 // Inicjalizacja danych z pamięci
-chrome.storage.sync.get("blockedSites", (data) => {
+chrome.storage.local.get("blockedSites", (data) => {
   if (data.blockedSites && Array.isArray(data.blockedSites)) {
     blockedSites = data.blockedSites.map(s => s.toLowerCase());
+    updateRules(); // Aktualizuj reguły po załadowaniu danych
   }
 });
 
 // 🔄 Nasłuch na zmiany w pamięci (dynamiczne odświeżenie listy)
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && changes.blockedSites) {
+  if (area === "local" && changes.blockedSites) {
     blockedSites = changes.blockedSites.newValue.map(s => s.toLowerCase());
+    updateRules(); // Aktualizuj reguły po zmianie danych
   }
 });
 
-// 🧠 Listener do "soft reload" tylko raz
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (
-    changeInfo.status === 'complete' &&
-    tab.url &&
-    !reloadedTabs.has(tabId) &&
-    tab.url.startsWith('http')
-  ) {
-    const url = new URL(tab.url);
+// 🧠 Nasłuch na próby nawigacji
+chrome.webNavigation.onBeforeNavigate.addListener((details) => {
+  if (details.frameId === 0) { // Tylko główna ramka
+    const url = new URL(details.url);
     const hostname = url.hostname.replace(/^www\./, '').toLowerCase();
 
     if (blockedSites.includes(hostname)) {
-      // 🔒 Zabezpieczenie: zapamiętaj, że przeładowałeś
-      reloadedTabs.add(tabId);
-
-      // 🔁 Wymuś reload (tylko raz)
-      chrome.tabs.reload(tabId);
-
-      // 🕒 Po 10 sekundach odblokuj możliwość reloadu
-      setTimeout(() => {
-        reloadedTabs.delete(tabId);
-      }, 10000);
+      // Anuluj nawigację
+      chrome.tabs.update(details.tabId, {
+        url: chrome.runtime.getURL('blocked.html')
+      });
     }
   }
 });
@@ -52,8 +43,8 @@ async function updateRules() {
     priority: 1,
     action: { type: "block" },
     condition: {
-      domains: [site.replace(/^(\*:\/\/)?(www\.)?/, '')],
-      resourceTypes: ["main_frame"]
+      urlFilter: `*://${site.replace(/^www\./, '')}/*`,
+      resourceTypes: ["main_frame", "sub_frame"]
     }
   }));
 
@@ -63,6 +54,8 @@ async function updateRules() {
       addRules: newRules
     });
 
+    // Zapisz aktualną listę do storage po każdej aktualizacji reguł
+    await chrome.storage.local.set({ blockedSites });
     console.log("✅ Reguły zaktualizowane:", newRules);
   } catch (err) {
     console.error("❌ Błąd aktualizacji reguł:", err);
@@ -84,15 +77,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "addSite" && site) {
     if (!blockedSites.includes(site)) {
       blockedSites.push(site);
-      chrome.storage.local.set({ blockedSites }); // nie awaitujemy
-      updateRules(); // w tle
+      updateRules(); // updateRules() już zapisuje do storage
+      sendResponse({ success: true });
+    } else {
+      sendResponse({ success: false, message: "Site already blocked" });
     }
-    sendResponse({ success: true });
 
   } else if (request.action === "removeSite" && site) {
     blockedSites = blockedSites.filter(s => s !== site);
-    chrome.storage.local.set({ blockedSites });
-    updateRules();
+    updateRules(); // updateRules() już zapisuje do storage
     sendResponse({ success: true });
 
   } else if (request.action === "getSites") {

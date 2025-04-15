@@ -2,10 +2,11 @@
   "name": "Evi.Dev Website Blocker",
   "version": "1.0",
   "manifest_version": 3,
-  "description": "Regain your focus with Evi.Dev Website Blocker — simple and efficient website blocking tool.",
+  "description": "Regain your focus with Evi.Dev Website Blocker",
   "permissions": [
     "declarativeNetRequest",
-    "storage"
+    "storage",
+    "webNavigation"
   ],
   "host_permissions": [
     "<all_urls>"
