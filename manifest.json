@@ -1,13 +1,15 @@
 {
-  "name": "Site Blocker",
+  "name": "Evi.Dev Website Blocker",
   "version": "1.0",
   "manifest_version": 3,
+  "description": "Regain your focus with Evi.Dev Website Blocker — simple and efficient website blocking tool.",
   "permissions": [
-  "declarativeNetRequest",
-  "declarativeNetRequestWithHostAccess",
-  "storage"
+    "declarativeNetRequest",
+    "storage"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -23,5 +25,14 @@
     "16": "images/icon16.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "default",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
   }
-} 
+}

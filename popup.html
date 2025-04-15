@@ -52,32 +52,67 @@
     .site-name {
       color: #333;
       font-size: 14px;
+      flex-grow: 1;
     }
     .status {
-      margin-left: auto;
       font-size: 12px;
       color: #ff4444;
       font-weight: bold;
+      margin-right: 10px;
+    }
+    .remove-btn {
+      background-color: #ff4444;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .remove-btn:hover {
+      background-color: #cc0000;
+    }
+    .add-site {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      background-color: white;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .site-input {
+      flex-grow: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .add-btn {
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .add-btn:hover {
+      background-color: #3367d6;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h2>Blocked Websites</h2>
+    <div class="add-site">
+      <input type="text" id="siteInput" class="site-input" placeholder="Enter website (e.g., facebook.com)">
+      <button id="addButton" class="add-btn">Add</button>
+    </div>
     <div class="blocked-list">
-      <ul id="blockedSitesList">
-        <li>
-          <div class="site-icon"></div>
-          <span class="site-name">facebook.com</span>
-          <span class="status">BLOCKED</span>
-        </li>
-        <li>
-          <div class="site-icon"></div>
-          <span class="site-name">instagram.com</span>
-          <span class="status">BLOCKED</span>
-        </li>
-      </ul>
+      <ul id="blockedSitesList"></ul>
     </div>
   </div>
+  <script src="popup.js"></script>
 </body>
 </html> 

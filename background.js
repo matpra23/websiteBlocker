@@ -1,73 +1,111 @@
 // List of blocked websites
-const blockedSites = ["facebook.com", "instagram.com"];
+let blockedSites = [];
+
+// 🔁 Śledzenie przeładowanych tabów
+const reloadedTabs = new Set();
+
+// Inicjalizacja danych z pamięci
+chrome.storage.sync.get("blockedSites", (data) => {
+  if (data.blockedSites && Array.isArray(data.blockedSites)) {
+    blockedSites = data.blockedSites.map(s => s.toLowerCase());
+  }
+});
+
+// 🔄 Nasłuch na zmiany w pamięci (dynamiczne odświeżenie listy)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync" && changes.blockedSites) {
+    blockedSites = changes.blockedSites.newValue.map(s => s.toLowerCase());
+  }
+});
+
+// 🧠 Listener do "soft reload" tylko raz
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (
+    changeInfo.status === 'complete' &&
+    tab.url &&
+    !reloadedTabs.has(tabId) &&
+    tab.url.startsWith('http')
+  ) {
+    const url = new URL(tab.url);
+    const hostname = url.hostname.replace(/^www\./, '').toLowerCase();
+
+    if (blockedSites.includes(hostname)) {
+      // 🔒 Zabezpieczenie: zapamiętaj, że przeładowałeś
+      reloadedTabs.add(tabId);
+
+      // 🔁 Wymuś reload (tylko raz)
+      chrome.tabs.reload(tabId);
+
+      // 🕒 Po 10 sekundach odblokuj możliwość reloadu
+      setTimeout(() => {
+        reloadedTabs.delete(tabId);
+      }, 10000);
+    }
+  }
+});
 
 // Update blocking rules
 async function updateRules() {
-  const rules = [];
-  let ruleId = 1;
+  const ruleIdsToRemove = blockedSites.map((_, i) => i + 1);
+  const newRules = blockedSites.map((site, i) => ({
+    id: i + 1,
+    priority: 1,
+    action: { type: "block" },
+    condition: {
+      domains: [site.replace(/^(\*:\/\/)?(www\.)?/, '')],
+      resourceTypes: ["main_frame"]
+    }
+  }));
 
-  // First, remove all existing rules
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: Array.from({length: 1000}, (_, i) => i + 1)
-  });
-
-  // Add rules for blocked sites
-  for (const pattern of blockedSites) {
-    rules.push({
-      id: ruleId++,
-      priority: 1,
-      action: { type: "block" },
-      condition: {
-        urlFilter: pattern,
-        resourceTypes: ["main_frame", "sub_frame"]
-      }
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: ruleIdsToRemove,
+      addRules: newRules
     });
-  }
 
-  // Add new rules
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    addRules: rules
-  });
+    console.log("✅ Reguły zaktualizowane:", newRules);
+  } catch (err) {
+    console.error("❌ Błąd aktualizacji reguł:", err);
+  }
 }
 
-// Initialize rules when extension starts
-updateRules();
+// Inicjalizacja reguł przy starcie
+chrome.runtime.onInstalled.addListener(() => {
+  init();
+});
 
-// Listen for messages from popup
+chrome.runtime.onStartup.addListener(() => {
+  init();
+});
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "addSite") {
-    const site = request.site.trim().toLowerCase();
+  const site = request.site?.trim().toLowerCase();
+
+  if (request.action === "addSite" && site) {
     if (!blockedSites.includes(site)) {
       blockedSites.push(site);
-      saveBlockedSites();
+      chrome.storage.local.set({ blockedSites }); // nie awaitujemy
+      updateRules(); // w tle
     }
-  } else if (request.action === "removeSite") {
-    const site = request.site.trim().toLowerCase();
+    sendResponse({ success: true });
+
+  } else if (request.action === "removeSite" && site) {
     blockedSites = blockedSites.filter(s => s !== site);
-    saveBlockedSites();
+    chrome.storage.local.set({ blockedSites });
+    updateRules();
+    sendResponse({ success: true });
+
   } else if (request.action === "getSites") {
     sendResponse({ sites: blockedSites });
   }
-  return true;
+
+  return true; // keep port open for async response
 });
 
-// Save blocked sites to storage
-async function saveBlockedSites() {
-  try {
-    await chrome.storage.sync.set({ blockedSites: blockedSites });
-    await updateRules();
-  } catch (error) {
-    console.error('Error saving sites:', error);
-  }
-}
-
 async function init() {
-  const stored = await chrome.storage.sync.get("blockedSites");
-  if (stored.blockedSites && Array.isArray(stored.blockedSites)) {
-    blockedSites.length = 0;
-    blockedSites.push(...stored.blockedSites);
+  const stored = await chrome.storage.local.get("blockedSites");
+  if (Array.isArray(stored.blockedSites)) {
+    blockedSites = stored.blockedSites;
+    await updateRules();
   }
-  await updateRules();
 }
-
-init();
